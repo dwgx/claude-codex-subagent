@@ -1,0 +1,21 @@
+{
+  "name": "claude-codex-subagent",
+  "version": "1.0.0",
+  "description": "Delegate expensive work (web search, large reads, long writes, bulk analysis) to the local Codex CLI as a worker subagent — Claude stays the orchestrator, Codex burns its own context. Adaptive sandbox, no approval prompts, thin-forwarder contract. Saves Claude tokens on grunt work.",
+  "author": {
+    "name": "dwgx",
+    "url": "https://github.com/dwgx"
+  },
+  "homepage": "https://github.com/dwgx/claude-codex-subagent",
+  "repository": "https://github.com/dwgx/claude-codex-subagent",
+  "license": "MIT",
+  "keywords": [
+    "claude",
+    "claude-code",
+    "codex",
+    "subagent",
+    "token-saver",
+    "orchestration",
+    "delegation"
+  ]
+}
