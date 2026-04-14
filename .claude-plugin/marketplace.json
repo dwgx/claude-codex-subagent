@@ -1,0 +1,19 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "claude-codex-subagent",
+  "description": "Single-plugin marketplace for claude-codex-subagent — the Codex CLI worker-subagent skill.",
+  "owner": {
+    "name": "dwgx",
+    "url": "https://github.com/dwgx"
+  },
+  "plugins": [
+    {
+      "name": "claude-codex-subagent",
+      "description": "Delegate expensive work (web search, large reads, long writes, bulk analysis) to the local Codex CLI as a worker subagent. Saves Claude tokens on grunt work.",
+      "category": "productivity",
+      "source": "./",
+      "homepage": "https://github.com/dwgx/claude-codex-subagent",
+      "version": "1.0.0"
+    }
+  ]
+}

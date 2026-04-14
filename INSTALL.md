@@ -62,29 +62,66 @@ Remove-Item -Recurse -Force $env:TEMP\claude-codex-subagent
 
 ### Verify
 
+Run the built-in health check — it validates everything in one go:
+
+```bash
+./scripts/doctor.sh
+```
+
+A clean install shows 17+ passes, 0 failures. If anything fails, the script tells you exactly what to fix.
+
+If you installed via curl (Option C) and don't have the scripts locally, verify manually:
+
 ```bash
 ls ~/.claude/skills/codex-subagent/SKILL.md
+codex --version
 ```
 
-Restart Claude Code, and the skill should appear in your available skills list. Test it with:
+Then restart Claude Code so the skill index loads, and run the 30-second smoke test below.
+
+### 30-second smoke test
+
+Open a fresh Claude Code conversation and ask:
 
 ```
-用 codex 查一下 bun 的最新版本
+用 codex 查一下 bun 的最新穩定版本,只回一行
 ```
+
+Expected behavior:
+
+1. Claude announces the dispatch in one line, mentioning the sandbox choice (should be `--dangerously-bypass-approvals-and-sandbox` because the task needs network).
+2. You see Claude run a Bash call to `codex exec`.
+3. After 10–30 seconds, Claude comes back with a single line like `bun 1.2.4 released 2026-03-28`.
+
+If Claude **doesn't dispatch** and instead tries to WebSearch / WebFetch itself: the skill didn't trigger. Check that the skill file is actually at `~/.claude/skills/codex-subagent/SKILL.md` and that Claude Code was restarted after install.
+
+If Claude dispatches but the call fails: re-run the command Claude showed in your own terminal (without the `2>>` redirect) to see the raw error, then check the troubleshooting section below.
 
 ---
 
-## Option B — As a Claude Code plugin
+## Option B — As a Claude Code plugin (marketplace install)
 
-If your Claude Code build supports plugin installation:
+Claude Code plugins are installed via marketplaces. This repo is a single-plugin marketplace, so installing is a two-step process:
 
 ```
-/plugin install https://github.com/dwgx/claude-codex-subagent
+/plugin marketplace add dwgx/claude-codex-subagent
+/plugin install claude-codex-subagent@claude-codex-subagent
 ```
 
-Or, if you're using a marketplace, add this repo as a source and install via the marketplace UI.
+The first command registers this repo as a marketplace source. The second installs the plugin from it.
 
-The plugin manifest is at `.claude-plugin/plugin.json`.
+To update later:
+```
+/plugin update claude-codex-subagent@claude-codex-subagent
+```
+
+To remove:
+```
+/plugin uninstall claude-codex-subagent@claude-codex-subagent
+/plugin marketplace remove claude-codex-subagent
+```
+
+> **Note:** If `/plugin marketplace add` doesn't resolve the repo (different Claude Code build, older version, or network restrictions), fall back to **Option A — manual copy**. That path has zero moving parts and always works.
 
 ---
 
@@ -124,6 +161,40 @@ Or via plugin system:
 ```
 /plugin uninstall claude-codex-subagent
 ```
+
+---
+
+## Platform notes
+
+### Pure Windows (cmd.exe or PowerShell without git-bash)
+
+Claude Code on Windows uses bash by default for shell commands — if you installed via the Windows installer, you already have git-bash bundled. This is the path we test.
+
+If you have a Claude Code build that routes commands through PowerShell or cmd.exe:
+
+- `/tmp/` doesn't exist → the skill's temp-log path won't work. Set the env var `CODEX_DISPATCH_TMPDIR=%TEMP%` in your Claude Code environment so `scripts/codex-dispatch.sh` writes logs to the Windows temp directory instead.
+- `openssl rand -hex 4` may not exist → `scripts/codex-dispatch.sh` falls back to a `date`/`sha256sum` based filename. The SKILL.md also documents the fallback.
+- Heredoc syntax (`<<'EOF'`) works in PowerShell 5.1+ via `@'...'@` but **not** in cmd.exe. If you're in cmd.exe, switch to PowerShell or install git-bash.
+
+**The recommended setup is still Git for Windows (git-bash)** — it's what Claude Code defaults to on Windows and it's what the skill is tested against. Pure cmd.exe is not supported.
+
+### WSL
+
+WSL works out of the box. Install Codex inside your WSL distro (`npm install -g @openai/codex` from inside WSL, not Windows), and make sure Claude Code's working directory is a WSL path (`/mnt/c/...` or `~`).
+
+### macOS
+
+No special considerations. The only watchout: some macOS versions ship an older bash (3.2) that's missing features used by `codex-dispatch.sh`. Install a newer bash via Homebrew if you hit syntax errors:
+
+```bash
+brew install bash
+```
+
+The skill itself (SKILL.md) has no bash version requirement — it's Claude constructing each `codex exec` call, not a shell script.
+
+### Linux
+
+Just works.
 
 ---
 

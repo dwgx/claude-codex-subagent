@@ -1,0 +1,18 @@
+# Force LF line endings on all text files so Windows contributors don't
+# ship CRLF into the repo. Shell scripts MUST be LF or they break on bash.
+* text=auto eol=lf
+
+*.md       text eol=lf
+*.sh       text eol=lf
+*.json     text eol=lf
+*.yml      text eol=lf
+*.yaml     text eol=lf
+*.toml     text eol=lf
+LICENSE    text eol=lf
+.gitignore text eol=lf
+
+# Binary files we don't want munged
+*.png binary
+*.jpg binary
+*.gif binary
+*.ico binary

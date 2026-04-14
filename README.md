@@ -1,10 +1,14 @@
 # claude-codex-subagent
 
+[![CI](https://github.com/dwgx/claude-codex-subagent/actions/workflows/ci.yml/badge.svg)](https://github.com/dwgx/claude-codex-subagent/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Claude Code](https://img.shields.io/badge/Claude%20Code-skill-6b46c1)](https://claude.com/claude-code)
+
 **Save Claude's tokens by delegating grunt work to the local Codex CLI.**
 
 A Claude Code skill that turns `codex exec` into a worker subagent. Claude stays the orchestrator — planning, deciding, verifying — while Codex handles everything that would otherwise burn Claude's context: web searches, large reads, bulk analysis, long file writes, running tests, audits.
 
-Works on macOS, Linux, and Windows (git-bash or WSL). Zero config beyond having `codex` on your PATH.
+Works on macOS, Linux, and Windows (git-bash or WSL). Zero runtime dependencies beyond `codex` on your PATH. No Node, no Python, no MCP server.
 
 ---
 
@@ -43,6 +47,8 @@ Claude's context stays tiny. Codex's context absorbs all the grunt work. The con
 - **Parallel batch dispatch** — independent subtasks fire in parallel via Claude Code's background task system.
 - **Background lifecycle** — long runs go background (`run_in_background: true`), poll with `TaskOutput`, cancel with `TaskStop`.
 - **Structured outcome classification** — every result is classified as `success` / `partial` / `error` and handled accordingly. No silent retries.
+- **Multi-modal personas** — 5 pre-written [persona templates](personas/) (`reviewer`, `debugger`, `auditor`, `researcher`, `refactorer`), each with its own sandbox/effort defaults and explicit return-format contract. Drop-in your own in the same format.
+- **Zero-dep helper scripts** — [`scripts/doctor.sh`](scripts/doctor.sh) for health checks, [`scripts/codex-dispatch.sh`](scripts/codex-dispatch.sh) for direct CLI use, [`scripts/sync-skill.sh`](scripts/sync-skill.sh) for maintainers.
 
 ## Prerequisites
 
@@ -103,7 +109,36 @@ Once installed, just talk to Claude normally. The skill self-triggers on phrases
 
 Claude will announce the dispatch in one line (including which sandbox it picked and why), run `codex exec`, and summarize the result. You never see the raw stdout unless you ask.
 
-See **[examples/sample-dispatches.md](examples/sample-dispatches.md)** for real dispatch patterns you can copy.
+### Using a persona
+
+Tell Claude to use a specific persona for more structured output:
+
+```
+用 codex 的 auditor persona 審計 src/api/auth/
+```
+
+```
+Dispatch codex in debugger mode — test_payment.py::test_refund is failing
+```
+
+See **[personas/](personas/)** for all available modes, or write your own (it's just markdown with a `{{TASK}}` placeholder).
+
+### Direct CLI dispatch (no Claude needed)
+
+```bash
+./scripts/codex-dispatch.sh --persona researcher \
+  "What's the current stable version of Bun as of today?"
+```
+
+See **[examples/sample-dispatches.md](examples/sample-dispatches.md)** for 8 real dispatch patterns you can copy.
+
+### Health check
+
+```bash
+./scripts/doctor.sh
+```
+
+Validates every moving part — Codex CLI presence and version, flag support, shell environment, skill install location. Run this first if anything seems off.
 
 ## Design philosophy
 
