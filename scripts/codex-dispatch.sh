@@ -86,7 +86,14 @@ if [[ -n "$PERSONA" ]]; then
   PERSONA_FILE="$SCRIPT_DIR/../personas/${PERSONA}.md"
   if [[ ! -f "$PERSONA_FILE" ]]; then
     echo "error: persona file not found: $PERSONA_FILE" >&2
-    echo "available: $(ls "$SCRIPT_DIR/../personas/" 2>/dev/null | grep '\.md$' | grep -v README | sed 's/\.md$//' | tr '\n' ' ')" >&2
+    avail=""
+    for f in "$SCRIPT_DIR/../personas/"*.md; do
+      [[ -f "$f" ]] || continue
+      base="$(basename "$f" .md)"
+      [[ "$base" == "README" ]] && continue
+      avail+="$base "
+    done
+    echo "available: $avail" >&2
     exit 3
   fi
   # strip frontmatter, substitute {{TASK}}
@@ -111,11 +118,11 @@ if [[ -z "$PROMPT" ]]; then
   usage 1 >&2
 fi
 
-# --- map sandbox name to codex flag ---
+# --- map sandbox name to codex flag(s) ---
 case "$SANDBOX" in
-  full-auto)  SANDBOX_FLAG="--full-auto" ;;
-  bypass)     SANDBOX_FLAG="--dangerously-bypass-approvals-and-sandbox" ;;
-  read-only)  SANDBOX_FLAG="--sandbox read-only" ;;
+  full-auto)  SANDBOX_FLAGS=(--full-auto) ;;
+  bypass)     SANDBOX_FLAGS=(--dangerously-bypass-approvals-and-sandbox) ;;
+  read-only)  SANDBOX_FLAGS=(--sandbox read-only) ;;
   *)          echo "error: unknown sandbox: $SANDBOX (want: full-auto|bypass|read-only)" >&2; exit 1 ;;
 esac
 
@@ -125,7 +132,11 @@ mkdir -p "$TMPDIR_"
 LOGFILE="$TMPDIR_/codex-$(openssl rand -hex 4 2>/dev/null || date +%s%N | sha256sum | head -c 8).log"
 
 CMD=(codex exec --skip-git-repo-check)
-[[ $RESUME -eq 1 ]] && CMD+=(resume --last) || CMD+=($SANDBOX_FLAG)
+if [[ $RESUME -eq 1 ]]; then
+  CMD+=(resume --last)
+else
+  CMD+=("${SANDBOX_FLAGS[@]}")
+fi
 [[ -n "$CD_DIR"  ]] && CMD+=(-C "$CD_DIR")
 [[ -n "$PROFILE" ]] && CMD+=(-p "$PROFILE")
 if [[ "$EFFORT" != "default" ]] && [[ $RESUME -eq 0 ]]; then
