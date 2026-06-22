@@ -29,12 +29,12 @@ pass() {
 }
 
 run_debug() {
-  LAST_OUT="$("$DISPATCH" "$@" --debug "Return OK" 2>&1)"
+  LAST_OUT="$(bash "$DISPATCH" "$@" --debug "Return OK" 2>&1)"
 }
 
 run_expect_fail() {
   set +e
-  LAST_OUT="$("$DISPATCH" "$@" 2>&1)"
+  LAST_OUT="$(bash "$DISPATCH" "$@" 2>&1)"
   local code=$?
   set -e
   [[ "$code" -ne 0 ]]
