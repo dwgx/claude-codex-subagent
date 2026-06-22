@@ -41,11 +41,22 @@ Use the helper script:
 
 The wrapper reads `personas/<name>.md`, fills the task slot with your argument, applies the persona's recommended flags, and runs `codex exec` with the canonical logging pattern.
 
+Persona frontmatter is a default, not an override. Explicit helper flags always
+win:
+
+```bash
+./scripts/codex-dispatch.sh --persona researcher --sandbox workspace-write \
+  "Use Codex web search only; do not use shell network."
+```
+
+Even though `researcher` normally defaults to bypass, the command above must
+stay on `--sandbox workspace-write`.
+
 ## Writing your own persona
 
 Copy one of the existing files and edit. The contract:
 
-- Start with frontmatter specifying **recommended sandbox**, **reasoning effort**, and **when to use** (free-form)
+- Start with frontmatter specifying **default sandbox**, **default reasoning effort**, and **when to use** (free-form)
 - Write the prompt body in the imperative, with a `{{TASK}}` placeholder where task-specific detail will be injected
 - Explicitly specify the **return format** — this is where personas earn their keep (consistent structured output per mode)
 
@@ -54,7 +65,7 @@ Minimum template:
 ```markdown
 ---
 persona: my-persona-name
-sandbox: full-auto|bypass
+sandbox: workspace-write|read-only|danger-full-access|bypass
 effort: low|medium|high|default
 when-to-use: one-line description
 ---
@@ -71,4 +82,4 @@ Return format:
 <explicit format specification>
 ```
 
-Personas are just markdown, so they're hackable, composable, and you can ship your own in your fork.
+Personas are just markdown, so they're hackable, composable, and you can ship your own in your fork. Older personas may still say `sandbox: full-auto`; the helper treats that as a legacy alias for `--sandbox workspace-write`, but new personas should use `workspace-write`.

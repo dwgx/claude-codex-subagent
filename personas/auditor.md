@@ -1,6 +1,6 @@
 ---
 persona: auditor
-sandbox: full-auto
+sandbox: workspace-write
 effort: high
 when-to-use: Security-focused audit of a codebase or component. Looks for real exploitable issues, not checklist-driven noise.
 ---

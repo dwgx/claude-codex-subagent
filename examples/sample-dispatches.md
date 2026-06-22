@@ -44,11 +44,11 @@ bun 1.2.4 released 2026-03-28
 
 **Why delegate:** Scanning dozens of files for TODO comments, cross-referencing git blame for each, and judging staleness would cost Claude thousands of tokens of `grep` + `blame` output. Codex runs it all internally and returns a structured table.
 
-**Sandbox:** `--full-auto` (read-only workload, no network)
+**Sandbox:** `--sandbox workspace-write` (local workload, no network)
 
 ```bash
 filename=$(openssl rand -hex 4)
-codex exec --skip-git-repo-check --full-auto -C /path/to/your/repo \
+codex exec --skip-git-repo-check --sandbox workspace-write -C /path/to/your/repo \
   --config model_reasoning_effort="high" \
   2>>"/tmp/codex-${filename}.log" <<'EOF'
 Find every TODO/FIXME/HACK comment under src/. For each one, judge whether
@@ -80,11 +80,11 @@ EOF
 
 **Why delegate:** A 400-line generated file costs 400 lines of Claude output tokens if Claude writes it. If Codex writes it, Claude just sees "wrote foo.py (412 lines)".
 
-**Sandbox:** `--full-auto` (write to workspace)
+**Sandbox:** `--sandbox workspace-write` (write to workspace)
 
 ```bash
 filename=$(openssl rand -hex 4)
-codex exec --skip-git-repo-check --full-auto -C /path/to/repo \
+codex exec --skip-git-repo-check --sandbox workspace-write -C /path/to/repo \
   2>>"/tmp/codex-${filename}.log" <<'EOF'
 Generate a Python module at src/schemas/user.py with:
   - a Pydantic v2 BaseModel called User
@@ -105,11 +105,11 @@ EOF
 
 **Why delegate:** Audits are explicitly what `model_reasoning_effort="high"` is for, and the output is often "X issues found at lines A, B, C" — a small return value for a large analytical effort.
 
-**Sandbox:** `--full-auto`
+**Sandbox:** `--sandbox workspace-write`
 
 ```bash
 filename=$(openssl rand -hex 4)
-codex exec --skip-git-repo-check --full-auto -C /path/to/repo \
+codex exec --skip-git-repo-check --sandbox workspace-write -C /path/to/repo \
   --config model_reasoning_effort="high" \
   2>>"/tmp/codex-${filename}.log" <<'EOF'
 Security audit src/api/auth/. Focus on:
@@ -139,7 +139,7 @@ EOF
 ```bash
 # Call 1 — in background
 filename=$(openssl rand -hex 4)
-codex exec --skip-git-repo-check --full-auto -C /repo/service-a \
+codex exec --skip-git-repo-check --sandbox workspace-write -C /repo/service-a \
   2>>"/tmp/codex-${filename}.log" \
   "Report service-a's public HTTP endpoints as a list: METHOD /path - description. No prose." &
 # (Claude dispatches the other N-1 calls the same way in parallel.)
@@ -158,7 +158,7 @@ In practice, Claude handles the task-id tracking — you just say "analyze all 5
 ```bash
 filename=$(openssl rand -hex 4)
 codex exec --skip-git-repo-check resume --last \
-  2>>"/tmp/codex-${filename}.log" <<'EOF'
+  - 2>>"/tmp/codex-${filename}.log" <<'EOF'
 Follow-up: for each stale TODO you found, also check if there's a
 corresponding open issue in the GitHub tracker (search for the file
 path in issue bodies). Add a column "tracked?" to the table: yes (with
@@ -167,8 +167,9 @@ EOF
 ```
 
 **Resume rules:**
-- Prompt goes via **stdin** (echo pipe or heredoc), not as a positional argument.
-- **Don't** re-specify `--sandbox`, `--model`, `--config`, `-p`. The session inherits from the original.
+- For generated multiline prompts, pass `-` and stdin.
+- Do not re-specify fresh-session context flags such as `--sandbox workspace-write`, `--sandbox read-only`, `-C`, `--add-dir`, or `-p`.
+- Codex 0.141.0 allows resume-time controls such as `--model`, `--config`, `--json`, `-o`, `--output-schema`, `--ephemeral`, and explicit bypass escalation.
 - Use resume for refinement, "now also do X", disagreement discussions.
 - Use a fresh call for unrelated tasks or when the last session was derailed.
 
@@ -181,7 +182,7 @@ EOF
 ```bash
 filename=$(openssl rand -hex 4)
 codex exec --skip-git-repo-check resume --last \
-  2>>"/tmp/codex-${filename}.log" <<'EOF'
+  - 2>>"/tmp/codex-${filename}.log" <<'EOF'
 This is Claude following up. I disagree with your claim that React 18's
 useEffect runs twice in development mode because of "hot reload". My
 understanding is that it's React 18's strict-mode intentional double-
@@ -198,11 +199,11 @@ EOF
 
 **Why:** When Claude's own attempt has stalled (bad assumption, wrong tool, circular reasoning), dispatching a fresh Codex session with a clean problem statement is often faster than continuing. Codex gets no context pollution.
 
-**Sandbox:** depends on the task — usually `--full-auto` for local or bypass for network.
+**Sandbox:** depends on the task — usually `--sandbox workspace-write` for local or bypass for shell network.
 
 ```bash
 filename=$(openssl rand -hex 4)
-codex exec --skip-git-repo-check --full-auto -C /path/to/repo \
+codex exec --skip-git-repo-check --sandbox workspace-write -C /path/to/repo \
   --config model_reasoning_effort="high" \
   2>>"/tmp/codex-${filename}.log" <<'EOF'
 Fresh pair of eyes needed. I'm debugging this failing test:

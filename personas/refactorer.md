@@ -1,6 +1,6 @@
 ---
 persona: refactorer
-sandbox: full-auto
+sandbox: workspace-write
 effort: medium
 when-to-use: Finding dead code, stale TODOs, complexity hotspots, or refactor opportunities across a codebase. Good for "where should I clean up" surveys.
 ---

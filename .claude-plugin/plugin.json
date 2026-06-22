@@ -1,6 +1,6 @@
 {
   "name": "claude-codex-subagent",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Delegate expensive work (web search, large reads, long writes, bulk analysis) to the local Codex CLI as a worker subagent. Claude orchestrates, Codex burns its own context. Adaptive sandbox, no approval prompts, thin-forwarder contract.",
   "author": {
     "name": "dwgx",

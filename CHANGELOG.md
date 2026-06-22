@@ -5,6 +5,30 @@ All notable changes to this project will be documented in this file.
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning: [SemVer](https://semver.org/).
 
+## [1.1.0] — 2026-06-22
+
+### Changed
+- Updated Codex CLI guidance for 0.141.0+: new examples and helper output now
+  prefer explicit `--sandbox workspace-write` instead of deprecated
+  `--full-auto`.
+- Expanded `scripts/codex-dispatch.sh` to pass through current non-interactive
+  automation flags such as helper `--search` (mapped to
+  `--config web_search="live"`), `--json`, `-o/--output-last-message`,
+  `--output-schema`, `--ephemeral`, `--add-dir`, `--ignore-user-config`, and
+  `--ignore-rules`.
+- Fixed wrapper precedence so explicit CLI/helper `--sandbox` and `--effort`
+  values beat persona frontmatter defaults, including explicit lower-sandbox
+  requests and explicit `--effort default`.
+- Added `scripts/test-dispatch-wrapper.sh` and wired it into doctor/CI to
+  validate wrapper precedence, current Codex flags, pass-through automation
+  options, resume guardrails, and missing-value usage errors.
+- Added repository-level `AGENTS.md`, `CLAUDE.md`, and
+  `docs/codex-dispatch-guide.md` so both Codex and Claude can learn the
+  intended dispatch workflow from durable project guidance.
+- Added `docs/prompt-and-agent-patterns.md`, a public guide for prompt
+  contracts, personas, skills, commands, subagent dispatch, result handling,
+  handoffs, and release-safe redaction boundaries.
+
 ## [1.0.0] — 2026-04-14
 
 ### Added
@@ -49,4 +73,5 @@ Versioning: [SemVer](https://semver.org/).
 - **Zero runtime dependencies** — no Node, no Python, no MCP server.
   Just markdown + bash.
 
+[1.1.0]: https://github.com/dwgx/claude-codex-subagent/releases/tag/v1.1.0
 [1.0.0]: https://github.com/dwgx/claude-codex-subagent/releases/tag/v1.0.0

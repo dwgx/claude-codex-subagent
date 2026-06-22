@@ -57,6 +57,8 @@ jobs:
               subprocess.check_call([sys.executable, "-m", "pip", "install", "-q", "pyyaml"])
               import yaml
           bad = 0
+          allowed_sandbox = {"workspace-write", "read-only", "danger-full-access", "bypass", "full-auto"}
+          allowed_effort = {"low", "medium", "high", "default"}
           for fn in sorted(os.listdir("personas")):
               if not fn.endswith(".md") or fn == "README.md":
                   continue
@@ -76,6 +78,12 @@ jobs:
                   if k not in fm:
                       print(f"FAIL: {path} frontmatter missing '{k}'", file=sys.stderr)
                       bad += 1
+              if fm.get("sandbox") not in allowed_sandbox:
+                  print(f"FAIL: {path} sandbox must be one of {sorted(allowed_sandbox)}", file=sys.stderr)
+                  bad += 1
+              if fm.get("effort") not in allowed_effort:
+                  print(f"FAIL: {path} effort must be one of {sorted(allowed_effort)}", file=sys.stderr)
+                  bad += 1
               if "{{TASK}}" not in content:
                   print(f"FAIL: {path} missing {{TASK}} placeholder", file=sys.stderr)
                   bad += 1
@@ -84,6 +92,76 @@ jobs:
           if bad:
               sys.exit(1)
           PY
+
+      - name: Validate public prompt guidance
+        run: |
+          python3 <<'PY'
+          import pathlib
+          import re
+          import sys
+
+          guide = pathlib.Path("docs/prompt-and-agent-patterns.md")
+          if not guide.exists():
+              print("FAIL: docs/prompt-and-agent-patterns.md is missing", file=sys.stderr)
+              sys.exit(1)
+
+          text = guide.read_text(encoding="utf-8")
+          required_headings = [
+              "## Public Boundary",
+              "## Instruction Surfaces",
+              "## Prompt Contract",
+              "## XML Block Template",
+              "## Agent Design",
+              "## Skill Design",
+              "## Persona Design",
+              "## Command Design",
+              "## Public Release Checklist",
+          ]
+          missing = [heading for heading in required_headings if heading not in text]
+          if missing:
+              print("FAIL: prompt guide missing headings: " + ", ".join(missing), file=sys.stderr)
+              sys.exit(1)
+
+          public_docs = [
+              pathlib.Path("AGENTS.md"),
+              pathlib.Path("CLAUDE.md"),
+              pathlib.Path("README.md"),
+              pathlib.Path("INSTALL.md"),
+              pathlib.Path("CONTRIBUTING.md"),
+              pathlib.Path("SECURITY.md"),
+              pathlib.Path("CHANGELOG.md"),
+              *pathlib.Path("docs").glob("*.md"),
+              *pathlib.Path("examples").glob("*.md"),
+              *pathlib.Path("personas").glob("*.md"),
+              pathlib.Path("skills/codex-subagent/SKILL.md"),
+          ]
+          forbidden = [
+              re.compile(r"C:\\Users\\[^\\\s`]+", re.IGNORECASE),
+              re.compile(r"D:\\(?!path\\to\\repo\b)[^\\\s`]+", re.IGNORECASE),
+              re.compile(r"OPENAI_API_KEY\s*=\s*[A-Za-z0-9_\-]{8,}"),
+              re.compile(r"CODEX_API_KEY\s*=\s*[A-Za-z0-9_\-]{8,}"),
+          ]
+          bad = []
+          for path in public_docs:
+              if not path.exists():
+                  continue
+              content = path.read_text(encoding="utf-8")
+              for pattern in forbidden:
+                  match = pattern.search(content)
+                  if match:
+                      bad.append(f"{path}: {match.group(0)}")
+          if bad:
+              print("FAIL: public docs contain machine-specific or secret-looking values:", file=sys.stderr)
+              for item in bad:
+                  print("  " + item, file=sys.stderr)
+              sys.exit(1)
+
+          print("prompt guide and public-doc hygiene: OK")
+          PY
+
+      - name: Validate wrapper precedence and usage errors
+        run: |
+          bash scripts/test-dispatch-wrapper.sh
 
       - name: shellcheck scripts
         run: |

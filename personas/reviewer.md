@@ -1,6 +1,6 @@
 ---
 persona: reviewer
-sandbox: full-auto
+sandbox: workspace-write
 effort: high
 when-to-use: PR-style code review with severity ranking and file:line citations. Best for "review these changes", "look at this diff", "what do you think of this file".
 ---

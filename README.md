@@ -39,7 +39,7 @@ Claude's context stays tiny. Codex's context absorbs all the grunt work. The con
 
 ## Features
 
-- **Adaptive sandbox** — defaults to `--full-auto` (workspace-write), automatically escalates to `--dangerously-bypass-approvals-and-sandbox` when the task needs network or cross-workspace access. **No approval prompts** — Claude announces the choice in one line and proceeds.
+- **Adaptive sandbox** — defaults to `--sandbox workspace-write`, automatically escalates to `--dangerously-bypass-approvals-and-sandbox` when the task needs shell network, cross-workspace access, or full local access. **No approval prompts** — Claude announces the choice in one line and proceeds.
 - **Thin-forwarder contract** — Codex's stdout is the authoritative return. No Claude-side freelancing, no phantom-answer drift.
 - **Smart stderr logging** — captures Codex's thinking stream to `/tmp/codex-<rand>.log` instead of `/dev/null`, so the happy path stays clean but failures are fully debuggable.
 - **Reasoning effort by task class** — audits and security reviews get `high`, normal edits use the default. No extra config.
@@ -49,6 +49,8 @@ Claude's context stays tiny. Codex's context absorbs all the grunt work. The con
 - **Structured outcome classification** — every result is classified as `success` / `partial` / `error` and handled accordingly. No silent retries.
 - **Multi-modal personas** — 5 pre-written [persona templates](personas/) (`reviewer`, `debugger`, `auditor`, `researcher`, `refactorer`), each with its own sandbox/effort defaults and explicit return-format contract. Drop-in your own in the same format.
 - **Zero-dep helper scripts** — [`scripts/doctor.sh`](scripts/doctor.sh) for health checks, [`scripts/codex-dispatch.sh`](scripts/codex-dispatch.sh) for direct CLI use, [`scripts/sync-skill.sh`](scripts/sync-skill.sh) for maintainers.
+- **Codex 0.141.0+ guidance** — current parameter guidance lives in [`docs/codex-dispatch-guide.md`](docs/codex-dispatch-guide.md), including `--sandbox workspace-write`, helper `--search` / direct `--config web_search="live"`, `--json`, `-o`, `--output-schema`, `--ephemeral`, and Windows sandbox fallback behavior.
+- **Public prompt and agent patterns** — [`docs/prompt-and-agent-patterns.md`](docs/prompt-and-agent-patterns.md) teaches durable prompt contracts, personas, skills, commands, subagent dispatch, result handling, handoffs, and public redaction rules.
 
 ## Prerequisites
 
@@ -109,6 +111,11 @@ Once installed, just talk to Claude normally. The skill self-triggers on phrases
 
 Claude will announce the dispatch in one line (including which sandbox it picked and why), run `codex exec`, and summarize the result. You never see the raw stdout unless you ask.
 
+Precedence is simple: explicit helper flags win over persona defaults. If you
+run `--persona researcher --sandbox workspace-write`, the wrapper stays on
+`--sandbox workspace-write` even though `researcher` normally defaults to
+bypass.
+
 ### Using a persona
 
 Tell Claude to use a specific persona for more structured output:
@@ -132,20 +139,23 @@ See **[personas/](personas/)** for all available modes, or write your own (it's 
 
 See **[examples/sample-dispatches.md](examples/sample-dispatches.md)** for 8 real dispatch patterns you can copy.
 
+For designing new dispatch prompts, personas, skills, commands, or public
+agent instructions, read **[docs/prompt-and-agent-patterns.md](docs/prompt-and-agent-patterns.md)**.
+
 ### Health check
 
 ```bash
 ./scripts/doctor.sh
 ```
 
-Validates every moving part — Codex CLI presence and version, flag support, shell environment, skill install location. Run this first if anything seems off.
+Validates every moving part — Codex CLI presence and version, current flag support, shell environment, skill install location. Run this first if anything seems off.
 
 ## Design philosophy
 
 Five principles, stolen from the best parts of five other projects:
 
 1. **Thin forwarder** (from [openai/codex-plugin-cc](https://github.com/openai/codex-plugin-cc)) — one call in, stdout out. No freelancing.
-2. **Adaptive escalation** (our own) — default low-privilege, escalate automatically, announce the choice. No prompts.
+2. **Adaptive escalation** (our own) — default to explicit `--sandbox workspace-write`, escalate automatically, announce the choice. No prompts.
 3. **Stderr to temp log, not /dev/null** (from [@timurkhakhalev/codex-cli-setup](https://github.com/timurkhakhalev/codex-cli-setup)) — `filename=$(openssl rand -hex 4); codex exec ... 2>>"/tmp/codex-${filename}.log"`. Clean happy path, full debug on failure.
 4. **Structured outcome classification** (from [shinpr/sub-agents-skills](https://github.com/shinpr/sub-agents-skills)) — `success` / `partial` / `error`, each with a handling rule.
 5. **Resume-first** (from [skills-directory/skill-codex](https://github.com/skills-directory/skill-codex)) — follow-ups reuse session state via `codex exec resume --last`, never paying to reload context.
@@ -164,7 +174,8 @@ Five principles, stolen from the best parts of five other projects:
 | `codex: command not found` | Codex CLI not installed or not on PATH | `npm install -g @openai/codex`, then restart your terminal |
 | `refusing to run outside a git repository` | Codex's default guard | Skill passes `--skip-git-repo-check` by default; if you see this, check the skill file is actually loaded |
 | `operation not permitted` / sandbox denial | Task needs higher sandbox | Skill should auto-escalate; if it didn't, check the task description matched an escalation trigger |
-| `network unreachable` | On `--full-auto` without network | Escalate to `--dangerously-bypass-approvals-and-sandbox` (skill does this automatically for network tasks) |
+| `network unreachable` | Shell network under workspace sandbox | Use helper `--search` or direct `--config web_search="live"` for web-search-only tasks, or escalate to `--dangerously-bypass-approvals-and-sandbox` for shell network |
+| `apply deny-read ACLs` on Windows | Codex Windows sandbox setup failed before the command ran | Retry authorized non-destructive work with bypass, and report the sandbox caveat |
 | Skill doesn't trigger when expected | Description phrasing didn't match | Say "用 codex" or "delegate to codex" explicitly; phrasing matters for skill triggering |
 
 Still stuck? Open an [issue](https://github.com/dwgx/claude-codex-subagent/issues).

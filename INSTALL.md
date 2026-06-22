@@ -25,6 +25,10 @@ codex --version
 bash --version
 ```
 
+On Windows PowerShell, `codex` and `claude` may resolve to `.ps1` shims that
+are blocked by execution policy. If that happens, use `codex.cmd` and
+`claude.cmd`, or run the project scripts through Git Bash.
+
 ---
 
 ## Option A — Manual skill copy (recommended for most people)
@@ -68,7 +72,9 @@ Run the built-in health check — it validates everything in one go:
 ./scripts/doctor.sh
 ```
 
-A clean install shows 17+ passes, 0 failures. If anything fails, the script tells you exactly what to fix.
+A clean install shows the Codex CLI version, current `codex exec` flags, shell
+environment, skill install path, and persona count. If anything fails, the
+script tells you exactly what to fix.
 
 If you installed via curl (Option C) and don't have the scripts locally, verify manually:
 
@@ -96,6 +102,12 @@ Expected behavior:
 If Claude **doesn't dispatch** and instead tries to WebSearch / WebFetch itself: the skill didn't trigger. Check that the skill file is actually at `~/.claude/skills/codex-subagent/SKILL.md` and that Claude Code was restarted after install.
 
 If Claude dispatches but the call fails: re-run the command Claude showed in your own terminal (without the `2>>` redirect) to see the raw error, then check the troubleshooting section below.
+
+Codex CLI 0.141.0+ note: new commands should use
+`--sandbox workspace-write`; `--full-auto` is only a deprecated compatibility
+alias. If Windows reports `apply deny-read ACLs` while using `read-only` or
+`workspace-write`, retry only authorized non-destructive work with
+`--dangerously-bypass-approvals-and-sandbox` and record the caveat.
 
 ---
 

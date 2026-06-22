@@ -1,6 +1,6 @@
 ---
 persona: debugger
-sandbox: full-auto
+sandbox: workspace-write
 effort: high
 when-to-use: Fresh-eyes root-cause analysis for a failing test, unexpected error, or behavior mismatch. Use when you (Claude) are stuck and want a clean-context second opinion.
 ---

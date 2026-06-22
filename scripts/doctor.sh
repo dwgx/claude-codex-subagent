@@ -47,11 +47,25 @@ section "2. Required flags on this codex build"
 # Test each flag by running `codex exec --help` and grepping
 if command -v codex >/dev/null 2>&1; then
   HELP_OUT="$(codex exec --help 2>&1 || true)"
-  for flag in "--skip-git-repo-check" "--full-auto" "--dangerously-bypass-approvals-and-sandbox" "-C" "--cd" "-p" "--profile" "--config"; do
+  for flag in "--skip-git-repo-check" "--sandbox" "workspace-write" "read-only" "danger-full-access" "--dangerously-bypass-approvals-and-sandbox" "-C" "--cd" "--add-dir" "-p" "--profile" "-m" "--model" "--config" "--json" "--output-last-message" "--output-schema" "--ephemeral" "--ignore-user-config" "--ignore-rules" "--strict-config" "--enable" "--disable"; do
     if echo "$HELP_OUT" | grep -q -- "$flag"; then
       check "$flag supported" pass
     else
       check "$flag supported" fail "your codex CLI is missing this flag — upgrade: npm install -g @openai/codex@latest"
+    fi
+  done
+  if echo "$HELP_OUT" | grep -q -- "--full-auto"; then
+    check "--full-auto legacy alias still listed" warn "new scripts should prefer: --sandbox workspace-write"
+  else
+    check "--full-auto omitted from help" pass "expected on Codex CLI 0.141.0+; the wrapper maps old 'full-auto' persona hints to --sandbox workspace-write"
+  fi
+  check "web search override path" pass "codex exec uses --config 'web_search=\"live\"'; the helper's --search option maps to that"
+  RESUME_HELP_OUT="$(codex exec resume --help 2>&1 || true)"
+  for flag in "--last" "-m" "--model" "--config" "--json" "--output-last-message" "--output-schema" "--ephemeral" "--ignore-user-config" "--ignore-rules" "--strict-config" "--enable" "--disable" "--dangerously-bypass-approvals-and-sandbox"; do
+    if echo "$RESUME_HELP_OUT" | grep -q -- "$flag"; then
+      check "resume $flag supported" pass
+    else
+      check "resume $flag supported" fail "your codex CLI resume command is missing this flag — upgrade: npm install -g @openai/codex@latest"
     fi
   done
 else
@@ -108,6 +122,22 @@ if [[ -d "$PERSONA_DIR" ]]; then
   check "personas/ directory ($PERSONA_COUNT persona files)" pass
 else
   check "personas/ directory" warn "not found — personas are optional"
+fi
+
+section "6. Wrapper behavior"
+
+DISPATCH="$SCRIPT_DIR/codex-dispatch.sh"
+WRAPPER_TEST="$SCRIPT_DIR/test-dispatch-wrapper.sh"
+if [[ -f "$WRAPPER_TEST" ]]; then
+  if WRAPPER_TEST_OUT="$(bash "$WRAPPER_TEST" 2>&1)"; then
+    check "dispatch wrapper behavior tests" pass
+  else
+    check "dispatch wrapper behavior tests" fail "$WRAPPER_TEST_OUT"
+  fi
+elif [[ -x "$DISPATCH" || -f "$DISPATCH" ]]; then
+  check "dispatch wrapper behavior tests" warn "scripts/test-dispatch-wrapper.sh not found"
+else
+  check "wrapper behavior checks" warn "scripts/codex-dispatch.sh not found"
 fi
 
 # --- summary ---

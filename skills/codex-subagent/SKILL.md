@@ -72,13 +72,14 @@ searches, delegate. If it's under ~1k, just do it.
 
 ## Command shape
 
-Canonical invocation:
+Canonical invocation for Codex CLI 0.141.0+:
 
 ```bash
 filename=$(openssl rand -hex 4)
-codex exec --skip-git-repo-check --sandbox <MODE> [--full-auto] \
-  [-C <DIR>] [-p <PROFILE>] \
-  [--config model_reasoning_effort="<level>"] \
+codex exec --skip-git-repo-check --sandbox <MODE> \
+  [-C <DIR>] [--add-dir <DIR>] [-p <PROFILE>] \
+  [--config web_search="live"] [--json] [-o <FILE>] [--output-schema <SCHEMA>] \
+  [--ephemeral] [--config model_reasoning_effort="<level>"] \
   "<PROMPT>" \
   2>>"/tmp/codex-${filename}.log"
 ```
@@ -88,15 +89,34 @@ Flag meanings:
 - `exec` — non-interactive. No TUI, no mid-run approval prompts.
 - `--skip-git-repo-check` — **always pass this.** We don't want Codex
   refusing to run just because the cwd isn't a git repo.
-- `--sandbox <MODE>` — see the adaptive ladder below.
-- `--full-auto` — alias for `--sandbox workspace-write`. Use this instead
-  of writing the sandbox flag explicitly when you want writes.
+- `--sandbox <MODE>` — use `read-only`, `workspace-write`, or
+  `danger-full-access`. See the adaptive ladder below.
+- `--full-auto` — deprecated compatibility alias. Do **not** use it in new
+  prompts or scripts. Prefer explicit `--sandbox workspace-write`.
 - `-C <DIR>` — run Codex with a specific working directory. Pass this
   whenever the task is scoped to a specific project folder; saves Codex
   a `cd` round-trip.
+- `--add-dir <DIR>` — add a second writable/readable root when a task
+  genuinely spans another local directory. Explain why in the status line.
 - `-p <PROFILE>` — if the user has profiles defined in `~/.codex/config.toml`
   (reviewer, debugger, security, etc.), reference them by profile name
   and let the profile carry model/sandbox/approval preferences.
+- `--config web_search="live"` — enable live web search for `codex exec`.
+  The interactive top-level `codex` command also has `--search`, but current
+  `codex exec` expects the config override. The helper script accepts
+  `--search` and maps it to this config value.
+- `--json` — stream Codex events as JSONL for automation. Only use when the
+  caller asked for machine-readable event logs or a wrapper will parse them.
+- `-o <FILE>` / `--output-last-message <FILE>` — save the final answer to a
+  file while still printing stdout. Good for handoffs, CI summaries, and
+  downstream scripts.
+- `--output-schema <SCHEMA>` — require the final response to match a JSON
+  Schema when another program will consume the result.
+- `--ephemeral` — avoid persisting session files. Use for throwaway checks,
+  secrets-adjacent diagnostics, and CI jobs that do not need resume.
+- `--ignore-user-config` / `--ignore-rules` — use only for controlled
+  automation where user config or execpolicy rules would make results
+  non-reproducible. Mention the tradeoff.
 - `--config model_reasoning_effort="<low|medium|high>"` — raise for
   audits, security reviews, and tricky debugging; leave unset for normal
   work. Don't override the user's default model unless they asked.
@@ -105,7 +125,7 @@ Flag meanings:
 
   ```bash
   filename=$(openssl rand -hex 4)
-  codex exec --skip-git-repo-check --full-auto \
+  codex exec --skip-git-repo-check --sandbox workspace-write \
     2>>"/tmp/codex-${filename}.log" <<'EOF'
   Your multi-line
   prompt here.
@@ -128,16 +148,33 @@ failure, without ever bloating Claude's context on the happy path.
 
 ## Sandbox ladder (adaptive, no-prompt)
 
-The user has authorized adaptive escalation: **default to `--full-auto`,
-escalate to `--dangerously-bypass-approvals-and-sandbox` whenever the task
-actually needs it, without stopping to ask.** Don't over-escalate — use
-the minimum that gets the job done.
+This skill uses non-interactive `codex exec`. Pick the right execution mode up
+front and run the worker to completion. If the user wants step-by-step
+accept/deny, use Codex interactive/TUI instead of this dispatch wrapper.
+
+The user has authorized adaptive escalation: **default to
+`--sandbox workspace-write`, escalate to bypass/full access whenever the
+task actually needs it, without stopping to ask.** Don't over-escalate —
+use the minimum that gets the job done and explain the choice in one line.
+
+Precedence is strict:
+
+1. Explicit CLI/helper flags win.
+2. Persona frontmatter supplies defaults only when the caller did not specify
+   `--sandbox` or `--effort`.
+3. Wrapper defaults apply last.
+
+This means a network-heavy persona such as `researcher` may default to bypass,
+but `--sandbox workspace-write` must remain workspace-write when the caller
+sets it explicitly. Likewise, explicit `--effort default` means do not emit a
+`model_reasoning_effort` override.
 
 | Task shape | Sandbox | Flag |
 | --- | --- | --- |
-| Read-only analysis inside workspace | workspace-write is fine | `--full-auto` |
-| Local edits / file writes inside a project | workspace-write | `--full-auto` |
-| **Anything needing network** (web search, fetch, `pip install`, `npm view`, `curl`, `gh api`, remote access) | bypass | `--dangerously-bypass-approvals-and-sandbox` |
+| Read-only analysis inside workspace | workspace-write is fine | `--sandbox workspace-write` |
+| Local edits / file writes inside a project | workspace-write | `--sandbox workspace-write` |
+| Current public facts through Codex web search only | workspace-write + live search | `--sandbox workspace-write --config web_search="live"` |
+| **Anything needing shell network** (`curl`, `pip install`, `npm view`, `gh api`, package installs, remote API calls) | bypass/full access | `--dangerously-bypass-approvals-and-sandbox` |
 | Operating outside the workspace (system paths, `~/.config`, other drives) | bypass | `--dangerously-bypass-approvals-and-sandbox` |
 | Installing global tools, modifying global state | bypass | `--dangerously-bypass-approvals-and-sandbox` |
 
@@ -149,6 +186,26 @@ approval needed, but transparency yes.
 database, force-push, rewriting git history) → stop and confirm with the
 user first regardless of sandbox mode. The sandbox protects the
 filesystem; it does not divine the user's intent.
+
+Windows note: if `read-only` or `workspace-write` fails before commands run
+with a Windows sandbox ACL error such as `apply deny-read ACLs`, classify the
+result as `partial`, report the exact error, and retry with
+`--dangerously-bypass-approvals-and-sandbox` only when the task is non-
+destructive and the user/workflow already authorizes full local access.
+
+## Output and automation options
+
+Use Codex's extra flags deliberately:
+
+| Need | Flag | Guidance |
+| --- | --- | --- |
+| Human-readable answer | default stdout | Best default; keep prompts terse. |
+| Save final answer | `-o <FILE>` | Use for repo-local handoff, CI summaries, or artifacts. |
+| Parse every event | `--json` | JSONL event stream; wrappers parse it, humans usually don't need it. |
+| Stable machine output | `--output-schema <schema.json>` | Use when downstream code needs fields, not prose. |
+| Fresh current web facts | `--config web_search="live"` | For Codex exec web search; the helper's `--search` option maps to this. |
+| Throwaway run | `--ephemeral` | No persisted session, so do not expect resume. |
+| Extra root | `--add-dir <DIR>` | Prefer one scoped extra directory; avoid broad drive roots. |
 
 ## Reasoning effort by task class
 
@@ -185,6 +242,45 @@ A good Codex prompt has:
 4. **Guardrails**, when non-obvious. "Don't modify tests.", "Don't touch
    anything outside src/api/."
 
+For complex dispatches, use a compact block contract:
+
+```xml
+<task>
+Do <specific goal>. Done means <observable done condition>.
+</task>
+
+<scope>
+Workspace: <repo>
+Inspect: <paths, commands, docs>
+Out of scope: <things not to touch>
+</scope>
+
+<execution_policy>
+Edits: allowed|not allowed
+Network: none|web-search-only|shell-network-ok
+Destructive actions: stop and ask before executing
+</execution_policy>
+
+<grounding_rules>
+Use current files, command output, tests, and official docs. Do not guess.
+Separate verified facts, evidence-based inference, and unknowns.
+</grounding_rules>
+
+<verification_loop>
+Run relevant checks after edits. If a check fails, diagnose and make the
+smallest scoped fix unless blocked by missing credentials, external state, or a
+safety gate.
+</verification_loop>
+
+<output_contract>
+Return the requested format plus validation outcomes and unverified items.
+</output_contract>
+```
+
+The full public guide for prompt, agent, skill, command, result-handling, and
+publication patterns lives in the source repository at
+`docs/prompt-and-agent-patterns.md`.
+
 Example — bad:
 
 ```
@@ -215,7 +311,7 @@ Example — bulk analysis with structured return:
 
 ```bash
 filename=$(openssl rand -hex 4)
-codex exec --skip-git-repo-check --full-auto -C /path/to/repo \
+codex exec --skip-git-repo-check --sandbox workspace-write -C /path/to/repo \
   --config model_reasoning_effort="high" \
   2>>"/tmp/codex-${filename}.log" <<'EOF'
 Find every TODO/FIXME comment under src/. For each, judge whether it
@@ -233,12 +329,12 @@ session still relevant to what you're about to ask? Codex keeps session
 state. Resume is cheap; a new session discards everything Codex already
 learned.
 
-Resume syntax (prompt via stdin, no flags):
+Resume syntax (prompt via stdin):
 
 ```bash
 filename=$(openssl rand -hex 4)
 echo "Your follow-up prompt" | codex exec --skip-git-repo-check \
-  resume --last 2>>"/tmp/codex-${filename}.log"
+  resume --last - 2>>"/tmp/codex-${filename}.log"
 ```
 
 Or with heredoc:
@@ -246,18 +342,25 @@ Or with heredoc:
 ```bash
 filename=$(openssl rand -hex 4)
 codex exec --skip-git-repo-check resume --last \
-  2>>"/tmp/codex-${filename}.log" <<'EOF'
+  - 2>>"/tmp/codex-${filename}.log" <<'EOF'
 Follow-up: now also check the peerDependencies field and flag mismatches.
 EOF
 ```
 
 Resume rules:
 
-- Feed the follow-up prompt via **stdin** (echo pipe or heredoc), not as
-  a positional argument — `resume` doesn't accept a prompt positional.
-- **Don't re-specify** flags like `--sandbox`, `--model`, `--config`,
-  `-p` on resume. The resumed session inherits from the original.
-  Passing them causes errors.
+- For multiline prompts, feed the follow-up via **stdin** with `-`.
+  Codex CLI 0.141.0 also accepts a positional resume prompt, but stdin is
+  safer for quoting and generated prompts.
+- Do not re-specify fresh-session context flags like `--sandbox
+  workspace-write`, `--sandbox read-only`, `-C`, `--add-dir`, or `-p` on
+  resume. The helper rejects those because the resumed session already has
+  context.
+- Codex CLI 0.141.0 does allow resume-time controls such as `--model`,
+  `--config`, `--json`, `-o`, `--output-schema`, `--ephemeral`,
+  `--ignore-user-config`, `--ignore-rules`, `--strict-config`, `--enable`,
+  `--disable`, and explicit `--sandbox bypass` when a resumed run must bypass
+  approvals and sandboxing.
 - Resume is the right tool for: iterative refinement, "now also do X",
   disagreement discussions, fed-back corrections.
 - If you need a clean slate (different project, unrelated task, or last
@@ -317,8 +420,9 @@ Codex's stdout is your return value. Before you act on it, classify it:
   | Symptom | Likely cause | Fix |
   |---|---|---|
   | `refusing to run outside a git repository` | Missing `--skip-git-repo-check` | Add the flag |
-  | `operation not permitted` / sandbox denial | Need higher sandbox | Escalate `--full-auto` → bypass |
-  | `network unreachable` / DNS failure | On `--full-auto` without network | Use `--dangerously-bypass-approvals-and-sandbox` |
+  | `operation not permitted` / sandbox denial | Need higher sandbox | Escalate `--sandbox workspace-write` -> bypass |
+  | `network unreachable` / DNS failure | Shell network under workspace sandbox | Use `--config web_search="live"` for web-search-only tasks or `--dangerously-bypass-approvals-and-sandbox` for shell network |
+  | `apply deny-read ACLs` on Windows | Codex Windows sandbox failed before command execution | Report the exact error; retry with bypass only for authorized non-destructive work |
   | `127` command not found | `codex` not on PATH | Surface to user, don't retry |
   | Codex asked a clarifying question in output | Under-specified prompt | Rewrite prompt with clearer goal / return format |
   | Empty output / hit timeout | Task too big for one call | Split into subtasks, or raise timeout |
@@ -344,7 +448,7 @@ Once you have a `success` result:
    filename=$(openssl rand -hex 4)
    echo "This is Claude following up. I disagree with [X] because \
    [evidence]. What's your take?" | \
-   codex exec --skip-git-repo-check resume --last \
+   codex exec --skip-git-repo-check resume --last - \
      2>>"/tmp/codex-${filename}.log"
    ```
 
@@ -361,8 +465,8 @@ Once you have a `success` result:
 Before dispatch — one line, in your normal chat voice:
 
 - "Dispatching to codex for the web lookup (bypass sandbox for network)."
-- "Delegating the repo scan to codex — full-auto, medium effort, read-
-  only workload."
+- "Delegating the repo scan to codex — workspace-write sandbox, medium
+  effort, local-only workload."
 - "Codex rescue: I'm stuck, handing off with a fresh context."
 
 After — short result summary. One or two sentences. What changed, what's
